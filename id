@@ -1,0 +1,218 @@
+ IDENTIFICATION DIVISION.
+       PROGRAM-ID.    CWLIST.
+       AUTHOR.        COBOLware Services Ltda.
+       DATE-WRITTEN.  99/99/9999.
+       SECURITY.      *************************************************
+                      *                                               *
+                      *  Exemplo de programa de listagem              *
+                      *                                               *
+                      *************************************************
+       ENVIRONMENT DIVISION.
+       CONFIGURATION SECTION.
+       SPECIAL-NAMES. DECIMAL-POINT IS COMMA.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+
+           COPY FileName-SL.
+
+      $Set IdxFormat"14"
+           SELECT SORTWK ASSIGN TO DISK
+                  ORGANIZATION  IS INDEXED
+                  ACCESS MODE   IS DYNAMIC
+                  RECORD  KEY   IS SORTWK-KEY WITH DUPLICATES
+                  LOCK MODE     IS EXCLUSIVE
+                  FILE STATUS   IS FS-SORTWK.
+      $Set IdxFormat"4"
+
+       DATA DIVISION.
+       FILE SECTION.
+
+       COPY FileName-FD.
+
+       FD  SORTWK
+           LABEL RECORD IS STANDARD
+           VALUE OF FILE-ID IS LB-SORTWK.
+
+       01  SORTWK-RECORD.
+           05 SORTWK-KEY.
+              10 SORTWK-CHAVE           PIC  X(018).
+              10 SORTWK-CHAVE-NUMERICA REDEFINES SORTWK-CHAVE
+                                           PIC  9(016)V99.
+              10 SORTWK-ORDEM       COMP-3 PIC  9(005).
+
+       WORKING-STORAGE SECTION.
+
+       01  AREAS-DE-TRABALHO-1.
+           05 SUBTITULO           PIC  X(174) VALUE SPACES.
+           05 CANCELOU            PIC  X(001) VALUE SPACE.
+              88 REPORT-CANCELED              VALUE "9".
+           05 CHAVE               PIC  9(002) VALUE 0.
+              88 POR-CODIGO                   VALUE 1.
+              88 POR-DESCRICAO                VALUE 2.
+              88 POR-PRECO                    VALUE 3.
+
+       COPY CWFSLB REPLACING ==(FileName)== BY  FileName
+                                     SPACES BY "FileName".
+       COPY CWFSLB REPLACING ==(FileName)== BY  SORTWK
+                                     SPACES BY "SORTWK".
+       COPY CWLIST.lay.
+
+       PROCEDURE DIVISION.
+
+       000-INICIO.
+
+           PERFORM 800-INICIAIS      THRU 800-99-FIM
+           PERFORM 100-PROCESSAMENTO THRU 100-99-FIM
+                   UNTIL NOT OK-FileName
+                      OR REPORT-CANCELED
+           PERFORM 900-FINAIS        THRU 900-99-FIM.
+
+       000-99-FIM. GOBACK.
+
+       100-PROCESSAMENTO.
+
+           READ FileName NEXT RECORD IGNORE LOCK
+
+           IF   OK-FileName
+                ADD     1         TO RD-FileName
+                CALL "CWFSLB"  USING ER-FileName
+                IF   POR-CODIGO
+
+                OR   POR-DESCRICAO
+                     PERFORM 110-LISTAR  THRU 110-99-FIM
+                ELSE
+                     PERFORM 120-ORDENAR THRU 120-99-FIM
+                END-IF
+           ELSE
+                IF   POR-PRECO
+                     MOVE LOW-VALUES TO SORTWK-CHAVE
+                     START SORTWK KEY NOT LESS SORTWK-CHAVE
+                     PERFORM 130-LISTAR-ORDENADO THRU 130-99-FIM
+                             UNTIL END-SORTWK
+                                OR REPORT-CANCELED
+                     SET END-FileName TO TRUE
+                END-IF
+           END-IF.
+
+       100-99-FIM. EXIT.
+
+       110-LISTAR.
+
+           MOVE CODIGO    TO CLIC-CODIGO
+           MOVE DESCRICAO TO CLIC-DESCRICAO
+           MOVE PRECO     TO CLIC-PRECO
+           EXEC COBOLware Print REPORT "CWLISTA"
+                TITLE     "LISTAGEM DO FileName"
+                NOTE      LB-FileName
+                SUBTITLE  SUBTITULO
+                HEADER(1) LINHA-01
+                DETAIL    LINHA-02
+                WIDTH-080
+                CANCEL;CANCELOU
+           END-EXEC
+           ADD  1                  TO LS-FileName
+           CALL "CWFSLB"        USING ER-FileName.
+
+       110-99-FIM. EXIT.
+ 
+       120-ORDENAR.
+
+           MOVE CODIGO TO SORTWK-ORDEM
+
+           IF   POR-PRECO
+                MOVE PRECO TO SORTWK-CHAVE-NUMERICA
+           END-IF
+
+           WRITE SORTWK-RECORD
+
+           IF   NOT OK-SORTWK
+                SET END-FileName TO TRUE
+           END-IF.
+
+       120-99-FIM. EXIT.
+
+       130-LISTAR-ORDENADO.
+
+           READ SORTWK NEXT RECORD
+
+           IF   OK-SORTWK
+                MOVE SORTWK-ORDEM TO CODIGO
+                READ FileName IGNORE LOCK
+                PERFORM 110-LISTAR THRU 110-99-FIM
+           END-IF.
+
+       130-99-FIM. EXIT.
+
+       800-INICIAIS.
+
+           OPEN INPUT FileName
+
+           IF   NOT OK-FileName
+                GOBACK
+           ELSE
+                SET OPENED-FileName TO TRUE
+           END-IF
+
+           INITIALIZE        FileName-RECORD
+           MOVE 08 TO   LINE-FileName
+           MOVE 03 TO COLUMN-FileName
+           MOVE 76 TO   SIZE-FileName
+
+           EXEC COBOLware BoxSelect
+                LINE 10 COLUMN 30
+                TITLE "Listar por"
+                TEXT(1) "~Código"
+                TEXT(2) "~Descrição"
+                TEXT(3) "~Preço"
+                OPTION 2;CHAVE
+           END-EXEC
+
+           EVALUATE TRUE
+               WHEN POR-CODIGO    
+                    MOVE "CODIGO"       TO SUBTITULO (13: )
+                    START FileName KEY NOT LESS FileName-KEY
+               WHEN POR-DESCRICAO
+                    MOVE "DESCRICAO"    TO SUBTITULO (13: )
+                    START FileName KEY NOT LESS DESCRICAO
+               WHEN POR-PRECO
+                    OPEN I-O SORTWK
+                    MOVE "PRECO"        TO SUBTITULO (13: )
+               WHEN OTHER
+                    IF   OPENED-FileName
+                         CLOSE FileName
+                         SET OPENED-FileName TO FALSE
+                    END-IF
+                    GOBACK
+           END-EVALUATE.
+
+       800-99-FIM. EXIT.
+
+       900-FINAIS.
+
+           IF  POR-PRECO
+               IF   NOT END-SORTWK
+               AND  NOT REPORT-CANCELED
+                    SET END-FileName TO TRUE
+                    EXEC COBOLware Print
+                         Detail "ERRO DE CLASSIFICACAO"
+                    END-EXEC
+               END-IF
+               CLOSE SORTWK
+           END-IF
+
+           IF   OPENED-FileName
+                CLOSE FileName
+                SET OPENED-FileName TO FALSE
+           END-IF
+
+           IF   NOT  REPORT-CANCELED
+                EXEC COBOLware Print Close
+                END-EXEC
+           END-IF
+
+           CALL "CWFSLB"  USING ER-FileName.
+
+       900-99-FIM. EXIT.
+
+       END PROGRAM CWLIST.
+
