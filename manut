@@ -1,0 +1,498 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID.    CWCADS.
+       AUTHOR.        COBOLware Services Ltda.
+       DATE-WRITTEN.  99/99/9999.
+       SECURITY.      *************************************************
+                      *                                               *
+                      *  Exemplo de cadastro                          *
+                      *                                               *
+                      *************************************************
+       ENVIRONMENT DIVISION.
+       CONFIGURATION SECTION.
+       SPECIAL-NAMES.
+           DECIMAL-POINT IS COMMA.
+
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+
+           COPY FileName-SL.
+
+       DATA DIVISION.
+       FILE SECTION.
+
+       COPY FileName-FD.
+
+       WORKING-STORAGE SECTION.
+
+       01  AREAS-DE-TRABALHO-1.
+           05 TIPOS.
+              10 CWRADIO      OCCURS 3 PIC  9(001).
+           05 CHECK-OPTIONS.
+              10 CWCHECK      OCCURS 3 PIC  9(001).
+           05 START-FLAG               PIC  9(001) VALUE ZERO.
+           05 START-KEY                PIC  9(002) VALUE ZERO.
+           05 PREVIOUS-KEY             PIC  9(002) VALUE ZERO.
+           05 SAVE-RECORD              PIC X(4096) VALUE ZERO.
+           05 SAVE-KEY                 PIC  X(255) VALUE SPACES.
+           05 PREVIOUS-FUNCTION        PIC  X(001) VALUE SPACE.
+           05 ESCAPE-KEY               PIC  9(002) VALUE ZERO.
+              COPY CWKEYS.
+
+       COPY CWFSLB REPLACING ==(FileName)== BY FileName
+                   SPACES BY =="FileName"==.
+       COPY CWFUNC.
+
+       SCREEN SECTION.
+
+       COPY CWCADS.lay.
+
+       01  TELA-DESCRICAO.
+           10 LINE 10 COLUMN 13 PIC X(030) USING DESCRICAO.
+
+       PROCEDURE DIVISION.
+
+       000-INICIO.
+
+           OPEN INPUT FileName
+
+           IF   NOT-EXIST-FileName
+                OPEN OUTPUT FileName
+                CLOSE FileName
+           ELSE
+                IF   OK-FileName
+                     CLOSE FileName
+                ELSE
+                     GOBACK
+                END-IF
+           END-IF
+
+           OPEN I-O FileName
+           SET OPENED-FileName TO TRUE
+           COMMIT
+
+           PERFORM 110-GRUPO THRU 110-99-FIM
+           INITIALIZE FileName-RECORD
+           DISPLAY CTAC-LIT-CWCADS
+           PERFORM 111-EXIBE THRU 111-99-FIM
+
+           PERFORM TEST AFTER UNTIL FINALIZAR
+                   PERFORM 110-GRUPO THRU 110-99-FIM
+                   IF   FUNCAO = SPACE
+                        MOVE ZERO TO START-KEY    
+                   END-IF
+                   EXEC COBOLware Option
+                        Function FUNCAO
+                   END-EXEC
+                   IF  NOT FINALIZAR
+                       PERFORM 100-PROCESSAMENTO THRU 100-99-FIM
+                   END-IF
+           END-PERFORM
+
+           IF   OPENED-FileName
+                CLOSE FileName
+                SET OPENED-FileName TO FALSE
+                COMMIT
+           END-IF
+
+           IF   PARAR
+                STOP RUN
+           ELSE
+                EXEC COBOLware Picture Erase
+                          LINE 9 COLUMN 52
+                END-EXEC
+                GOBACK
+           END-IF.
+
+       100-PROCESSAMENTO.
+
+           PERFORM 110-GRUPO THRU 110-99-FIM
+           COPY CWESCP.
+
+           PERFORM TEST AFTER
+                   UNTIL(NOT (PAGE-UP   AND PAGE-UP-OFF))
+                     AND(NOT (PAGE-DOWN AND PAGE-DOWN-OFF))
+                   EVALUATE TRUE
+                       WHEN INCLUSAO
+                            PERFORM 140-NOVO-CODIGO THRU 140-99-FIM
+                            ACCEPT TELA-CHAVE
+                            IF   FileName-KEY = SAVE-KEY
+                                 PERFORM 140-NOVO-CODIGO THRU 140-99-FIM
+                            END-IF
+                       WHEN ALTERACAO OR EXCLUSAO OR CONSULTA
+                            COPY CWPGON.
+                            MOVE ZERO            TO START-FLAG
+                            MOVE FileName-RECORD TO SAVE-RECORD
+                            PERFORM UNTIL START-KEY NOT EQUAL ZERO
+                                    EXEC COBOLware BoxSelect
+                                         TITLE "Pesquisar:"
+                                         LINE 10 COLUMN 10
+                                         TEXT(1) "~Código"
+                                         TEXT(2) "~Descrição"
+                                         OPTION (START-KEY)
+                                    END-EXEC
+                                    MOVE START-KEY TO START-FLAG
+                                    IF  START-KEY EQUAL ZERO
+                                        MOVE 99    TO START-KEY
+                                        MOVE SPACE TO FUNCAO
+                                    END-IF
+                            END-PERFORM
+                            EVALUATE START-KEY
+                                WHEN 1
+                                     EXEC COBOLware Object COMBO-BOX
+                                          LINE 08 COLUMN 13
+                                          HEIGHT 10 WIDTH 5
+                                          PROVIDER "FILENAME-PROVIDER"
+                                          FIELD CODIGO
+                                          ORDER-LEFT RETURN-LEFT
+                                          LEFT-WIDTH  6
+                                          RIGHT-WIDTH 30
+                                     END-EXEC
+                                     ACCEPT TELA-CHAVE
+                                WHEN 2
+                                     EXEC COBOLware Object COMBO-BOX
+                                          LINE 10 COLUMN 13
+                                          HEIGHT 10 WIDTH 30
+                                          PROVIDER "FILENAME-PROVIDER"
+                                          FIELD DESCRICAO
+                                          ORDER-RIGHT RETURN-RIGHT
+                                          RIGHT-WIDTH 30
+                                     END-EXEC
+                                     ACCEPT TELA-DESCRICAO
+                            END-EVALUATE
+                            PERFORM 110-GRUPO THRU 110-99-FIM
+                            IF   FileName-RECORD EQUAL SAVE-RECORD
+                            AND  START-KEY       EQUAL PREVIOUS-KEY
+                            AND  FUNCAO          EQUAL PREVIOUS-FUNCTION
+                                 MOVE ZERO       TO START-FLAG  
+                            END-IF
+                            MOVE START-KEY       TO PREVIOUS-KEY
+                            MOVE FUNCAO          TO PREVIOUS-FUNCTION   
+                            IF  (START-FLAG      NOT EQUAL ZERO)
+                            OR  (FileName-RECORD NOT EQUAL SAVE-RECORD)
+                                 MOVE 1            TO START-FLAG
+                                 SET  PAGE-UP-ON   TO TRUE
+                                 SET  PAGE-DOWN-ON TO TRUE
+                                 SET  READY-OFF    TO TRUE
+                                 EVALUATE START-KEY
+                                  WHEN 1 START FileName KEY NOT LESS        
+                                               FileName-KEY
+                                         INVALID KEY
+                                          START FileName KEY NOT GREATER
+                                                FileName-KEY
+                                          END-START
+                                         END-START
+                                  WHEN 2 START FileName KEY NOT LESS
+                                               DESCRICAO
+                                         INVALID KEY
+                                          START FileName KEY NOT GREATER
+                                                DESCRICAO
+                                          END-START
+                                         END-START
+                                 END-EVALUATE
+                            END-IF
+                   END-EVALUATE
+                   IF   START-FLAG EQUAL ZERO   
+                        ACCEPT ESCAPE-KEY FROM ESCAPE KEY
+                   ELSE
+                        SET PAGE-DOWN TO TRUE
+                        EXIT PERFORM
+                   END-IF
+           END-PERFORM
+
+           EVALUATE TRUE
+               WHEN ESC
+                    MOVE SPACE TO FUNCAO
+               WHEN INCLUSAO
+                AND CODIGO EQUAL ZERO
+                    EXEC COBOLware Send
+                         Message "Informe código do produto"
+                    END-EXEC
+               WHEN INCLUSAO
+                    READ FileName
+                    IF   OK-FileName
+                         PERFORM 111-EXIBE THRU 111-99-FIM
+                         EXEC COBOLware Send
+                              Message "Produto já cadastrado"
+                         END-EXEC
+                    ELSE
+                         IF   NOT-FOUND-FileName
+                              WRITE FileName-RECORD
+                              READ FileName WITH LOCK
+                              PERFORM 120-CRITICA THRU 120-99-FIM
+                              IF   EFETIVAR
+                                   REWRITE FileName-RECORD
+                                   COMMIT
+                              ELSE
+                                   EXEC COBOLware Picture Erase
+                                             LINE 9 COLUMN 52
+                                   END-EXEC
+                                   DELETE FileName RECORD
+                                   EXEC COBOLware Picture Remove
+                                             RECORD  CODIGO
+                                             FILE "fotos"
+                                   END-EXEC
+                                   COMMIT
+                              END-IF
+                         END-IF
+                    END-IF
+               WHEN (ALTERACAO OR EXCLUSAO OR CONSULTA)
+                AND (PAGE-DOWN OR PAGE-UP)
+                    IF   NOT-FOUND-FileName
+                         EVALUATE START-KEY
+                             WHEN 1
+                                  START FileName
+                                        KEY NOT LESS FileName-KEY
+                                        INVALID KEY
+                                        START FileName KEY NOT GREATER
+                                              FileName-KEY
+                                        END-START
+                                  END-START
+                             WHEN 2
+                                  START FileName
+                                        KEY NOT LESS DESCRICAO
+                                        INVALID KEY
+                                        START FileName KEY NOT GREATER
+                                              DESCRICAO
+                                        END-START
+                                  END-START
+                         END-EVALUATE
+                    END-IF
+                    EVALUATE TRUE
+                             WHEN PAGE-DOWN
+                              AND PAGE-DOWN-ON
+                                  READ FileName
+                                       NEXT RECORD IGNORE LOCK
+                             WHEN PAGE-UP
+                              AND PAGE-UP-ON
+                                  READ FileName
+                                       PREVIOUS RECORD IGNORE LOCK
+                    END-EVALUATE
+                    IF   NOT OK-FileName
+                         IF NOT END-FileName
+                            SET RETORNO TO TRUE
+                         END-IF
+                    ELSE
+                         EVALUATE TRUE
+                                  WHEN PAGE-DOWN
+                                   AND PAGE-UP-OFF
+                                       SET PAGE-UP-ON   TO TRUE
+                                  WHEN PAGE-UP
+                                   AND PAGE-DOWN-OFF
+                                       SET PAGE-DOWN-ON TO TRUE
+                         END-EVALUATE
+                         SET     READY-ON    TO TRUE  
+                         PERFORM 111-EXIBE THRU 111-99-FIM
+                    END-IF
+                    IF   END-FileName
+                         SET READY-OFF TO TRUE
+                         EVALUATE TRUE
+                                  WHEN PAGE-DOWN
+                                       SET PAGE-DOWN-OFF TO TRUE
+                                       READ FileName
+                                       PREVIOUS RECORD IGNORE LOCK
+                                  WHEN PAGE-UP
+                                       SET PAGE-UP-OFF   TO TRUE
+                                       READ FileName
+                                       NEXT RECORD IGNORE LOCK
+                         END-EVALUATE
+                         IF  (NOT END-FileName)
+                         AND (NOT AFTER-END-FileName)
+                              SET READY-ON     TO TRUE
+                              SET END-FileName TO TRUE
+                         END-IF
+                    END-IF
+               WHEN (ALTERACAO OR EXCLUSAO OR CONSULTA)
+                AND (ENTER-KEY OR F2)
+                    IF   CONSULTA
+                         READ FileName IGNORE LOCK
+                    ELSE
+                         READ FileName WITH LOCK
+                         IF   LOCKED-FileName
+                              READ FileName IGNORE LOCK
+                              SET LOCKED-FileName TO TRUE
+                         END-IF
+                    END-IF
+                    MOVE 1      TO START-FLAG
+                    MOVE SPACES TO SAVE-RECORD
+                    PERFORM 111-EXIBE THRU 111-99-FIM
+                    EVALUATE TRUE
+                        WHEN NOT-FOUND-FileName
+                             SET READY-OFF TO TRUE
+                             EXEC COBOLware Send
+                                  Message "Produto não cadastrado"
+                             END-EXEC 
+                        WHEN LOCKED-FileName
+                             SET READY-OFF TO TRUE
+                             EXEC COBOLware Send
+                                  Message "Produto ocupado"
+                             END-EXEC
+                        WHEN NOT OK-FileName
+                             SET RETORNO TO TRUE
+                        WHEN ALTERACAO
+                             MOVE FileName-RECORD TO SAVE-RECORD
+                             EXEC COBOLware Object DROP END-EXEC
+                             PERFORM 120-CRITICA THRU 120-99-FIM
+                             IF   EFETIVAR
+                                  REWRITE FileName-RECORD
+                                  COMMIT
+                             ELSE
+                                  UNLOCK FileName
+                             END-IF
+                        WHEN EXCLUSAO
+                             PERFORM 130-CONFIRMA THRU 130-99-FIM
+                             IF   EFETIVAR
+                                  DELETE FileName RECORD
+                                  COMMIT
+                                  EXEC COBOLware Picture Erase
+                                       LINE 9 COLUMN 52
+                                  END-EXEC
+                                  EXEC COBOLware Picture Remove
+                                          RECORD CODIGO
+                                            FILE "fotos"
+                                  END-EXEC
+                             ELSE
+                                  UNLOCK FileName
+                             END-IF
+
+                    END-EVALUATE
+                    IF   NOT OK-FileName                                
+                    AND  EFETIVAR
+                         SET RETORNO TO TRUE
+                    END-IF
+           END-EVALUATE.
+
+       100-99-FIM. EXIT.
+
+       110-GRUPO.
+
+           EXEC COBOLware Object DROP END-EXEC
+           EXEC COBOLware Object GROUP
+                LINE 14 COLUMN 3 WIDTH 36 CAPTION "Tipo"
+           END-EXEC
+           EXEC COBOLware Object GROUP 
+                LINE 18 COLUMN 3 WIDTH 41 CAPTION "Opções"
+           END-EXEC.
+
+       110-99-FIM. EXIT.
+
+       111-EXIBE.
+
+           INITIALIZE TIPOS
+
+           IF   TIPO GREATER ZERO
+                MOVE "1" TO CWRADIO(TIPO)
+           END-IF
+           MOVE IMPORTADO TO CWCHECK(1)
+           MOVE GARANTIA  TO CWCHECK(2)
+           MOVE DURAVEL   TO CWCHECK(3)
+ 
+           EXEC COBOLware Picture Display
+                     LINE 9 COLUMN 52 WIDTH  21
+                                      HEIGHT 13
+                     RECORD CODIGO
+                     FILE "fotos"
+           END-EXEC
+           DISPLAY CTAC-VAR-CWCADS.
+
+       111-99-FIM. EXIT.
+
+       120-CRITICA.
+
+           PERFORM 110-GRUPO THRU 110-99-FIM
+           COPY CWESCP.
+           EXEC COBOLware Object Push-Button Small
+                     LINE 23 COLUMN 02 WIDTH 13
+                     CAPTION " f3-~Concluir "
+                     KEY F3 TAB-OFF
+           END-EXEC 
+           EXEC COBOLware Object Push-Button Small
+                     LINE 23 COLUMN 17 WIDTH 9
+                     CAPTION " f4-~Foto "
+                     KEY F4 TAB-OFF
+           END-EXEC
+           EXEC COBOLware Object Validate
+                PROGRAM "CWCADS-VALIDATOR" USING DESCRICAO
+                                                 PRECO
+                                                 CWRADIO(1)
+                                                 CWRADIO(2)
+                                                 CWRADIO(3)
+                                                 CWCHECK(1)
+                                                 CWCHECK(2)
+                                                 CWCHECK(3)
+                    FIELD ANY
+           END-EXEC
+
+           PERFORM TEST AFTER UNTIL NOT F4
+                   ACCEPT TELA-DADOS
+                   ACCEPT ESCAPE-KEY FROM ESCAPE KEY
+                   IF  F4
+                       EXEC COBOLware Picture Update
+                                 RECORD CODIGO
+                                 FILE "fotos"
+                       END-EXEC
+                       EXEC COBOLware Picture Display
+                                 LINE 9 COLUMN 52 WIDTH  21
+                                                  HEIGHT 13
+                               RECORD CODIGO
+                                 FILE "fotos"
+                       END-EXEC
+                   END-IF
+           END-PERFORM
+
+           MOVE SPACE TO COMANDO
+
+           IF   NOT ESC
+                PERFORM VARYING TIPO FROM 3 BY -1
+                                UNTIL TIPO EQUAL ZERO
+                                   OR CWRADIO (TIPO) = "1"
+                         CONTINUE
+                END-PERFORM
+                MOVE CWCHECK(1) TO IMPORTADO 
+                MOVE CWCHECK(2) TO GARANTIA
+                MOVE CWCHECK(3) TO DURAVEL
+                IF    FileName-RECORD EQUAL SAVE-RECORD
+                AND   ALTERACAO
+                      SET ABORTAR TO TRUE
+                ELSE
+                      PERFORM 130-CONFIRMA THRU 130-99-FIM
+                END-IF
+           ELSE
+                MOVE SPACE TO FUNCAO
+           END-IF
+
+           PERFORM 110-GRUPO THRU 110-99-FIM.
+
+       120-99-FIM. EXIT.
+
+       130-CONFIRMA.
+
+           COPY CWEFAB.
+           IF   EFETIVAR
+                EXEC COBOLware LogWrite
+                     FUNCTION FUNCAO
+                     TEXT CODIGO
+                END-EXEC
+           END-IF.
+
+       130-99-FIM. EXIT.
+
+       140-NOVO-CODIGO.
+
+           MOVE HIGH-VALUES TO FileName-RECORD
+           START FileName KEY NOT GREATER FileName-KEY
+            INVALID KEY
+                    INITIALIZE FileName-RECORD
+                    MOVE 1 TO CODIGO
+               NOT INVALID KEY
+                   READ FileName PREVIOUS RECORD IGNORE LOCK
+                   ADD  1              TO CODIGO
+                   MOVE FileName-KEY   TO SAVE-KEY
+                   INITIALIZE FileName-RECORD
+                   MOVE SAVE-KEY    TO FileName-KEY
+           END-START
+           PERFORM 111-EXIBE THRU 111-99-FIM
+           DISPLAY TELA-CHAVE.
+
+       140-99-FIM. EXIT.
+
+       END PROGRAM CWCADS.
