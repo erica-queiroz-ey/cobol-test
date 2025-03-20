@@ -1,0 +1,77 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID.    CWCADS-VALIDATOR.
+       AUTHOR.        COBOLware Services Ltda.
+       DATE-WRITTEN.  99/99/9999.
+       SECURITY.      *************************************************
+                      *                                               *
+                      *  Exemplo de modulo validador                  *
+                      *                                               *
+                      *************************************************
+       ENVIRONMENT DIVISION.
+       CONFIGURATION SECTION.
+       SPECIAL-NAMES. DECIMAL-POINT IS COMMA.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+
+
+       DATA DIVISION.
+       FILE SECTION.
+
+       WORKING-STORAGE SECTION.
+
+       77  ESCAPE-KEY                 PIC  9(002). COPY CWKEYS.
+
+       LINKAGE SECTION.
+
+       01  ERRO                       PIC  9(001).
+
+       01  DADOS                      PIC X(2000).
+       01  TELA-CHAVE REDEFINES DADOS.
+           05 CODIGO                  PIC  9(005).
+       01  TELA-DADOS REDEFINES DADOS.
+           05 DESCRICAO               PIC  X(030).
+           05 PRECO                   PIC  9(008)V99.
+           05 CWRADIO OCCURS 3        PIC  X(001).
+           05 CWCHECK OCCURS 3        PIC  X(001).
+
+       01  FIELD                      PIC  X(030).
+       01  SUBSCRIPT                  PIC  9(003).
+
+       PROCEDURE DIVISION USING ERRO DADOS FIELD SUBSCRIPT.
+
+       BEGIN.
+
+           MOVE ZERO TO ERRO
+
+           ACCEPT ESCAPE-KEY FROM ESCAPE KEY
+
+           EVALUATE FIELD
+               WHEN "DESCRICAO"
+                    IF   DESCRICAO EQUAL SPACES
+                         EXEC COBOLware Send
+                              Message "Falta descrição"
+                         END-EXEC
+                         MOVE 1 TO ERRO
+                    END-IF
+               WHEN "PRECO"
+                    IF   PRECO EQUAL ZERO
+                         EXEC COBOLware Send
+                              Message "Falta preço"
+                         END-EXEC
+                         MOVE 1 TO ERRO
+                    END-IF
+               WHEN "CWRADIO"
+                    IF   SUBSCRIPT EQUAL 3
+                    AND (CWRADIO(1) NOT EQUAL "1")
+                    AND (CWRADIO(2) NOT EQUAL "1")
+                    AND (CWRADIO(3) NOT EQUAL "1")
+                         EXEC COBOLware Send
+                              Message "Falta tipo"
+                         END-EXEC
+                         MOVE 1 TO ERRO
+                    END-IF
+           END-EVALUATE.
+
+           GOBACK.
+
+       END PROGRAM CWCADS-VALIDATOR.                                    
